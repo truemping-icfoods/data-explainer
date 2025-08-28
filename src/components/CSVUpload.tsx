@@ -27,7 +27,14 @@ const CSVUpload = () => {
 
     setUploading(true);
     try {
-      const fileName = `${Date.now()}_${file.name}`;
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("You must be logged in to upload files");
+      }
+
+      // Create file path with user ID folder
+      const fileName = `${user.id}/${Date.now()}_${file.name}`;
       const { error } = await supabase.storage
         .from("csv-files")
         .upload(fileName, file);
