@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Upload, File, Download, Loader2 } from "lucide-react";
+import { Upload, File, Download, Loader2, BarChart3 } from "lucide-react";
 
 interface UploadedFile {
   name: string;
@@ -16,6 +17,7 @@ interface UploadedFile {
 }
 
 const CSVUpload = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -154,7 +156,17 @@ const CSVUpload = () => {
       {/* Uploaded Files Section */}
       <Card className="p-6">
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Your Uploaded Files</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Your Uploaded Files</h3>
+            <Button 
+              variant="outline" 
+              onClick={() => navigate("/analyze")}
+              disabled={uploadedFiles.length === 0}
+            >
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Analyze Data
+            </Button>
+          </div>
           
           {loadingFiles ? (
             <div className="flex items-center justify-center py-8">
