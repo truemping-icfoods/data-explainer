@@ -25,6 +25,9 @@ const AnalyzeData = () => {
   const [selectedFile, setSelectedFile] = useState<string>("");
   const [prompt, setPrompt] = useState("");
   const [loadingFiles, setLoadingFiles] = useState(true);
+  const [llmOutput, setLlmOutput] = useState<string>("");
+  const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'submitted' | 'in-progress' | 'successful' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -64,7 +67,7 @@ const AnalyzeData = () => {
     }
   }, [user]);
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!selectedFile) {
       toast.error("Please select a data file first");
       return;
@@ -74,8 +77,39 @@ const AnalyzeData = () => {
       return;
     }
     
-    // TODO: Implement LLM analysis
-    toast.success("Analysis started!");
+    // Simulate LLM analysis workflow
+    setAnalysisStatus('submitted');
+    setErrorMessage("");
+    setLlmOutput("");
+    toast.success("Analysis submitted!");
+    
+    // Simulate processing time
+    setTimeout(() => {
+      setAnalysisStatus('in-progress');
+    }, 500);
+    
+    // Simulate API call with random success/error
+    setTimeout(() => {
+      const isSuccess = Math.random() > 0.2; // 80% success rate
+      
+      if (isSuccess) {
+        setAnalysisStatus('successful');
+        // Simulate LLM response (256 tokens)
+        const mockResponse = `Based on the analysis of ${selectedFile}, here are the key insights from your prompt "${prompt.substring(0, 50)}...": 
+
+The data reveals several interesting patterns and trends. The analysis shows significant correlations between various data points, with notable seasonal variations and growth patterns emerging from the dataset. Key metrics indicate strong performance in certain categories while highlighting areas that may require attention.
+
+The statistical analysis reveals important trends that could inform strategic decision-making. Data quality appears robust with minimal outliers, and the temporal patterns suggest consistent underlying processes. These findings provide a solid foundation for further investigation and tactical implementation.
+
+[Simulated response - 256 tokens limit reached]`;
+        setLlmOutput(mockResponse);
+        toast.success("Analysis completed successfully!");
+      } else {
+        setAnalysisStatus('error');
+        setErrorMessage("Simulation error: OpenAI API key not configured. Please add your API key to enable real LLM analysis.");
+        toast.error("Analysis failed - API key needed");
+      }
+    }, 3000);
   };
 
   if (loading) {
@@ -170,14 +204,58 @@ const AnalyzeData = () => {
               />
               <Button
                 onClick={handleAnalyze}
-                disabled={!selectedFile || !prompt.trim()}
+                disabled={!selectedFile || !prompt.trim() || analysisStatus === 'in-progress'}
                 className="w-full"
               >
-                <Send className="mr-2 h-4 w-4" />
-                Analyze Data
+                {analysisStatus === 'in-progress' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                {analysisStatus === 'in-progress' ? 'Analyzing...' : 'Analyze Data'}
               </Button>
             </div>
           </Card>
+
+          {/* Analysis Status */}
+          {analysisStatus !== 'idle' && (
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Analysis Status</h2>
+              <div className="flex items-center gap-3">
+                {analysisStatus === 'in-progress' && (
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                )}
+                <span className={`font-medium ${
+                  analysisStatus === 'successful' ? 'text-green-600' :
+                  analysisStatus === 'error' ? 'text-red-600' :
+                  analysisStatus === 'in-progress' ? 'text-blue-600' :
+                  'text-gray-600'
+                }`}>
+                  {analysisStatus === 'submitted' && 'Submitted'}
+                  {analysisStatus === 'in-progress' && 'In Progress'}
+                  {analysisStatus === 'successful' && 'Successful'}
+                  {analysisStatus === 'error' && 'Error'}
+                </span>
+              </div>
+              {errorMessage && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{errorMessage}</p>
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* LLM Output */}
+          {llmOutput && (
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Analysis Results</h2>
+              <div className="bg-muted/50 p-4 rounded-lg border">
+                <pre className="whitespace-pre-wrap text-sm font-mono text-foreground">
+                  {llmOutput}
+                </pre>
+              </div>
+            </Card>
+          )}
         </div>
       </div>
     </div>
