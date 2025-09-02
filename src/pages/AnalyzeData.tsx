@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, File, Loader2, Send } from "lucide-react";
+import { ArrowLeft, File, Loader2, Send, Edit } from "lucide-react";
 
 interface UploadedFile {
   name: string;
@@ -66,6 +66,13 @@ const AnalyzeData = () => {
       fetchUploadedFiles();
     }
   }, [user]);
+
+  const handleEdit = () => {
+    setPrompt("");
+    setLlmOutput("");
+    setAnalysisStatus('idle');
+    setErrorMessage("");
+  };
 
   const handleAnalyze = async () => {
     if (!selectedFile) {
@@ -192,9 +199,21 @@ The statistical analysis reveals important trends that could inform strategic de
           {/* LLM Prompt */}
           <Card className="p-6">
             <div className="space-y-4">
-              <Label htmlFor="llm-prompt" className="text-xl font-semibold">
-                LLM Prompt
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="llm-prompt" className="text-xl font-semibold">
+                  LLM Prompt
+                </Label>
+                {prompt.trim() && analysisStatus !== 'in-progress' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleEdit}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                )}
+              </div>
               <Textarea
                 id="llm-prompt"
                 placeholder="Enter your analysis prompt here... e.g., 'Analyze the trends in crop yield data and provide insights'"
