@@ -31,10 +31,10 @@ const CSVUpload = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile && selectedFile.type === "text/csv") {
+    if (selectedFile) {
       setFile(selectedFile);
     } else {
-      toast.error("Please select a valid CSV file");
+      toast.error("Please select a valid file");
     }
   };
 
@@ -106,10 +106,10 @@ const CSVUpload = () => {
         throw error;
       }
 
-      toast.success("CSV file uploaded successfully!");
+      toast.success("File uploaded successfully!");
       setFile(null);
       // Reset the input
-      const input = document.getElementById("csv-input") as HTMLInputElement;
+      const input = document.getElementById("file-input") as HTMLInputElement;
       if (input) input.value = "";
       // Refresh the file list
       fetchUploadedFiles();
@@ -135,15 +135,15 @@ const CSVUpload = () => {
         <div className="space-y-4">
           <div className="text-center">
             <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-            <h2 className="text-2xl font-semibold mt-2">Upload CSV File</h2>
-            <p className="text-muted-foreground">Select a CSV file to upload to your database</p>
+            <h2 className="text-2xl font-semibold mt-2">Upload Data File</h2>
+            <p className="text-muted-foreground">Select a file to upload to your database (CSV, Excel, JSON, PDF, TXT, XML)</p>
           </div>
           
           <div className="space-y-3">
             <Input
-              id="csv-input"
+              id="file-input"
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls,.json,.pdf,.txt,.xml"
               onChange={handleFileChange}
               className="cursor-pointer"
             />
@@ -190,7 +190,7 @@ const CSVUpload = () => {
                   Uploading...
                 </>
               ) : (
-                "Upload CSV"
+                "Upload File"
               )}
             </Button>
           </div>
@@ -221,7 +221,7 @@ const CSVUpload = () => {
             <div className="text-center py-8 text-muted-foreground">
               <File className="mx-auto h-12 w-12 mb-2 opacity-50" />
               <p>No files uploaded yet</p>
-              <p className="text-sm">Upload your first CSV file to get started</p>
+              <p className="text-sm">Upload your first file to get started</p>
             </div>
           ) : (
             <div className="space-y-2">
