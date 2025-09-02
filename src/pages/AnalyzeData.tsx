@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ArrowLeft, File, Loader2, Send, Edit } from "lucide-react";
+
+type FileType = "farm-data" | "certification-requirements";
 
 interface UploadedFile {
   name: string;
@@ -16,13 +19,15 @@ interface UploadedFile {
   metadata?: {
     size?: number;
   };
+  type?: FileType;
 }
 
 const AnalyzeData = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [selectedFile, setSelectedFile] = useState<string>("");
+  const [farmDataFiles, setFarmDataFiles] = useState<UploadedFile[]>([]);
+  const [certificationFiles, setCertificationFiles] = useState<UploadedFile[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [prompt, setPrompt] = useState("");
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [llmOutput, setLlmOutput] = useState<string>("");
@@ -40,20 +45,25 @@ const AnalyzeData = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase.storage
-        .from("csv-files")
-        .list(user.id, {
+      // Fetch from both farm-data and certification-requirements folders
+      const [farmDataResponse, certResponse] = await Promise.all([
+        supabase.storage.from("csv-files").list(`${user.id}/farm-data`, {
           limit: 100,
           offset: 0,
           sortBy: { column: "created_at", order: "desc" }
-        });
+        }),
+        supabase.storage.from("csv-files").list(`${user.id}/certification-requirements`, {
+          limit: 100,
+          offset: 0,
+          sortBy: { column: "created_at", order: "desc" }
+        })
+      ]);
 
-      if (error) {
-        console.error("Error fetching files:", error);
-        return;
-      }
+      const farmFiles = (farmDataResponse.data || []).map(file => ({ ...file, type: "farm-data" as FileType }));
+      const certFiles = (certResponse.data || []).map(file => ({ ...file, type: "certification-requirements" as FileType }));
 
-      setUploadedFiles(data || []);
+      setFarmDataFiles(farmFiles);
+      setCertificationFiles(certFiles);
     } catch (error) {
       console.error("Error fetching files:", error);
     } finally {
@@ -74,9 +84,17 @@ const AnalyzeData = () => {
     setErrorMessage("");
   };
 
+  const handleFileSelection = (fileName: string, isSelected: boolean) => {
+    if (isSelected) {
+      setSelectedFiles(prev => [...prev, fileName]);
+    } else {
+      setSelectedFiles(prev => prev.filter(f => f !== fileName));
+    }
+  };
+
   const handleAnalyze = async () => {
-    if (!selectedFile) {
-      toast.error("Please select a data file first");
+    if (selectedFiles.length === 0) {
+      toast.error("Please select at least one data file first");
       return;
     }
     if (!prompt.trim()) {
@@ -102,7 +120,8 @@ const AnalyzeData = () => {
       if (isSuccess) {
         setAnalysisStatus('successful');
         // Simulate LLM response (256 tokens)
-        const mockResponse = `Based on the analysis of ${selectedFile}, here are the key insights from your prompt "${prompt.substring(0, 50)}...": 
+        const fileList = selectedFiles.length > 1 ? `${selectedFiles.length} selected files` : selectedFiles[0];
+        const mockResponse = `Based on the analysis of ${fileList}, here are the key insights from your prompt "${prompt.substring(0, 50)}...": 
 
 The data reveals several interesting patterns and trends. The analysis shows significant correlations between various data points, with notable seasonal variations and growth patterns emerging from the dataset. Key metrics indicate strong performance in certain categories while highlighting areas that may require attention.
 
@@ -150,51 +169,94 @@ The statistical analysis reveals important trends that could inform strategic de
 
         <div className="space-y-6">
           {/* File Selection */}
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Select Data File</h2>
-            {loadingFiles ? (
+          {loadingFiles ? (
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Select Data Files</h2>
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 <span className="ml-2 text-muted-foreground">Loading files...</span>
               </div>
-            ) : uploadedFiles.length === 0 ? (
+            </Card>
+          ) : farmDataFiles.length === 0 && certificationFiles.length === 0 ? (
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Select Data Files</h2>
               <div className="text-center py-8 text-muted-foreground">
                 <File className="mx-auto h-12 w-12 mb-2 opacity-50" />
                 <p>No data files found</p>
                 <p className="text-sm">Upload your first CSV file to get started</p>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {uploadedFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
-                      selectedFile === file.name
-                        ? "bg-primary/10 border-primary"
-                        : "hover:bg-muted/50"
-                    }`}
-                    onClick={() => setSelectedFile(file.name)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="radio"
-                        checked={selectedFile === file.name}
-                        onChange={() => setSelectedFile(file.name)}
-                        className="text-primary"
-                      />
-                      <File className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">{file.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(file.created_at).toLocaleDateString()}
-                        </p>
+            </Card>
+          ) : (
+            <>
+              {/* Farm Data Files */}
+              {farmDataFiles.length > 0 && (
+                <Card className="p-6">
+                  <h2 className="text-xl font-semibold mb-4">Farm Data Files</h2>
+                  <div className="space-y-2">
+                    {farmDataFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
+                          selectedFiles.includes(file.name)
+                            ? "bg-primary/10 border-primary"
+                            : "hover:bg-muted/50"
+                        }`}
+                        onClick={() => handleFileSelection(file.name, !selectedFiles.includes(file.name))}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            checked={selectedFiles.includes(file.name)}
+                            onCheckedChange={(checked) => handleFileSelection(file.name, checked as boolean)}
+                          />
+                          <File className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">{file.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(file.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
+                </Card>
+              )}
+
+              {/* Certification Requirements Files */}
+              {certificationFiles.length > 0 && (
+                <Card className="p-6">
+                  <h2 className="text-xl font-semibold mb-4">Certification Requirements Files</h2>
+                  <div className="space-y-2">
+                    {certificationFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
+                          selectedFiles.includes(file.name)
+                            ? "bg-primary/10 border-primary"
+                            : "hover:bg-muted/50"
+                        }`}
+                        onClick={() => handleFileSelection(file.name, !selectedFiles.includes(file.name))}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            checked={selectedFiles.includes(file.name)}
+                            onCheckedChange={(checked) => handleFileSelection(file.name, checked as boolean)}
+                          />
+                          <File className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">{file.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(file.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </>
+          )}
 
           {/* LLM Prompt */}
           <Card className="p-6">
@@ -223,7 +285,7 @@ The statistical analysis reveals important trends that could inform strategic de
               />
               <Button
                 onClick={handleAnalyze}
-                disabled={!selectedFile || !prompt.trim() || analysisStatus === 'in-progress'}
+                disabled={selectedFiles.length === 0 || !prompt.trim() || analysisStatus === 'in-progress'}
                 className="w-full"
               >
                 {analysisStatus === 'in-progress' ? (

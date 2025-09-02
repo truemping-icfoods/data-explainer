@@ -3,9 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Upload, File, Download, Loader2, BarChart3 } from "lucide-react";
+
+type FileType = "farm-data" | "certification-requirements";
 
 interface UploadedFile {
   name: string;
@@ -14,11 +18,13 @@ interface UploadedFile {
   metadata?: {
     size?: number;
   };
+  type?: FileType;
 }
 
 const CSVUpload = () => {
   const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
+  const [fileType, setFileType] = useState<FileType>("farm-data");
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(true);
@@ -37,20 +43,34 @@ const CSVUpload = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase.storage
-        .from("csv-files")
-        .list(user.id, {
+      // Fetch from both farm-data and certification-requirements folders
+      const [farmDataResponse, certResponse] = await Promise.all([
+        supabase.storage.from("csv-files").list(`${user.id}/farm-data`, {
           limit: 100,
           offset: 0,
           sortBy: { column: "created_at", order: "desc" }
-        });
+        }),
+        supabase.storage.from("csv-files").list(`${user.id}/certification-requirements`, {
+          limit: 100,
+          offset: 0,
+          sortBy: { column: "created_at", order: "desc" }
+        })
+      ]);
 
-      if (error) {
-        console.error("Error fetching files:", error);
-        return;
+      const allFiles: UploadedFile[] = [];
+      
+      if (farmDataResponse.data) {
+        allFiles.push(...farmDataResponse.data.map(file => ({ ...file, type: "farm-data" as FileType })));
+      }
+      
+      if (certResponse.data) {
+        allFiles.push(...certResponse.data.map(file => ({ ...file, type: "certification-requirements" as FileType })));
       }
 
-      setUploadedFiles(data || []);
+      // Sort by created_at descending
+      allFiles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      setUploadedFiles(allFiles);
     } catch (error) {
       console.error("Error fetching files:", error);
     } finally {
@@ -76,8 +96,8 @@ const CSVUpload = () => {
         throw new Error("You must be logged in to upload files");
       }
 
-      // Create file path with user ID folder
-      const fileName = `${user.id}/${Date.now()}_${file.name}`;
+      // Create file path with user ID and file type folder
+      const fileName = `${user.id}/${fileType}/${Date.now()}_${file.name}`;
       const { error } = await supabase.storage
         .from("csv-files")
         .upload(fileName, file);
@@ -129,9 +149,33 @@ const CSVUpload = () => {
             />
             
             {file && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <File className="h-4 w-4" />
-                <span>{file.name}</span>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <File className="h-4 w-4" />
+                  <span>{file.name}</span>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">File Type</Label>
+                  <RadioGroup
+                    value={fileType}
+                    onValueChange={(value) => setFileType(value as FileType)}
+                    className="flex gap-6"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="farm-data" id="farm-data" />
+                      <Label htmlFor="farm-data" className="text-sm cursor-pointer">
+                        Farm Data
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="certification-requirements" id="certification-requirements" />
+                      <Label htmlFor="certification-requirements" className="text-sm cursor-pointer">
+                        Certification Requirements
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
               </div>
             )}
             
@@ -191,6 +235,7 @@ const CSVUpload = () => {
                     <div>
                       <p className="text-sm font-medium">{uploadedFile.name}</p>
                       <p className="text-xs text-muted-foreground">
+                        {uploadedFile.type === "farm-data" ? "Farm Data" : "Certification Requirements"} • 
                         {new Date(uploadedFile.created_at).toLocaleDateString()} • {formatFileSize(uploadedFile.metadata?.size)}
                       </p>
                     </div>
