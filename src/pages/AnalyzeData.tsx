@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, File, Loader2, Send, Edit } from "lucide-react";
+import { ArrowLeft, File, Loader2, Send, Edit, Clock, Hash } from "lucide-react";
 
 type FileType = "farm-data" | "certification-requirements";
 
@@ -29,10 +30,18 @@ const AnalyzeData = () => {
   const [certificationFiles, setCertificationFiles] = useState<UploadedFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [prompt, setPrompt] = useState("");
+  const [temperature, setTemperature] = useState<number>(0.7);
+  const [maxTokens, setMaxTokens] = useState<number>(1000);
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [llmOutput, setLlmOutput] = useState<string>("");
   const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'submitted' | 'in-progress' | 'successful' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [apiStatistics, setApiStatistics] = useState<{
+    processingTime: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -82,6 +91,7 @@ const AnalyzeData = () => {
     setLlmOutput("");
     setAnalysisStatus('idle');
     setErrorMessage("");
+    setApiStatistics(null);
   };
 
   const handleFileSelection = (fileName: string, isSelected: boolean) => {
@@ -102,40 +112,45 @@ const AnalyzeData = () => {
       return;
     }
     
-    // Simulate LLM analysis workflow
     setAnalysisStatus('submitted');
     setErrorMessage("");
     setLlmOutput("");
+    setApiStatistics(null);
     toast.success("Analysis submitted!");
     
-    // Simulate processing time
     setTimeout(() => {
       setAnalysisStatus('in-progress');
     }, 500);
-    
-    // Simulate API call with random success/error
-    setTimeout(() => {
-      const isSuccess = Math.random() > 0.2; // 80% success rate
-      
-      if (isSuccess) {
-        setAnalysisStatus('successful');
-        // Simulate LLM response (256 tokens)
-        const fileList = selectedFiles.length > 1 ? `${selectedFiles.length} selected files` : selectedFiles[0];
-        const mockResponse = `Based on the analysis of ${fileList}, here are the key insights from your prompt "${prompt.substring(0, 50)}...": 
 
-The data reveals several interesting patterns and trends. The analysis shows significant correlations between various data points, with notable seasonal variations and growth patterns emerging from the dataset. Key metrics indicate strong performance in certain categories while highlighting areas that may require attention.
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-data', {
+        body: {
+          selectedFiles,
+          prompt,
+          temperature,
+          maxTokens
+        }
+      });
 
-The statistical analysis reveals important trends that could inform strategic decision-making. Data quality appears robust with minimal outliers, and the temporal patterns suggest consistent underlying processes. These findings provide a solid foundation for further investigation and tactical implementation.
-
-[Simulated response - 256 tokens limit reached]`;
-        setLlmOutput(mockResponse);
-        toast.success("Analysis completed successfully!");
-      } else {
-        setAnalysisStatus('error');
-        setErrorMessage("Simulation error: OpenAI API key not configured. Please add your API key to enable real LLM analysis.");
-        toast.error("Analysis failed - API key needed");
+      if (error) {
+        throw new Error(error.message || 'Failed to analyze data');
       }
-    }, 3000);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setAnalysisStatus('successful');
+      setLlmOutput(data.generatedText);
+      setApiStatistics(data.statistics);
+      toast.success("Analysis completed successfully!");
+
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setAnalysisStatus('error');
+      setErrorMessage(error.message || 'An unexpected error occurred during analysis');
+      toast.error("Analysis failed");
+    }
   };
 
   if (loading) {
@@ -258,12 +273,12 @@ The statistical analysis reveals important trends that could inform strategic de
             </>
           )}
 
-          {/* LLM Prompt */}
+          {/* LLM Prompt and Settings */}
           <Card className="p-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="llm-prompt" className="text-xl font-semibold">
-                  LLM Prompt
+                  LLM Prompt & Settings
                 </Label>
                 {prompt.trim() && analysisStatus !== 'in-progress' && (
                   <Button
@@ -276,6 +291,7 @@ The statistical analysis reveals important trends that could inform strategic de
                   </Button>
                 )}
               </div>
+              
               <Textarea
                 id="llm-prompt"
                 placeholder="Enter your analysis prompt here... e.g., 'Analyze the trends in crop yield data and provide insights'"
@@ -283,6 +299,43 @@ The statistical analysis reveals important trends that could inform strategic de
                 onChange={(e) => setPrompt(e.target.value)}
                 className="min-h-[120px]"
               />
+              
+              {/* OpenAI Parameters */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="temperature">Temperature (0.0 - 2.0)</Label>
+                  <Input
+                    id="temperature"
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={temperature}
+                    onChange={(e) => setTemperature(parseFloat(e.target.value) || 0)}
+                    placeholder="0.7"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Controls randomness. Lower = more focused, Higher = more creative
+                  </p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="max-tokens">Max Tokens</Label>
+                  <Input
+                    id="max-tokens"
+                    type="number"
+                    min="1"
+                    max="4000"
+                    value={maxTokens}
+                    onChange={(e) => setMaxTokens(parseInt(e.target.value) || 1000)}
+                    placeholder="1000"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum length of the response (1-4000 tokens)
+                  </p>
+                </div>
+              </div>
+              
               <Button
                 onClick={handleAnalyze}
                 disabled={selectedFiles.length === 0 || !prompt.trim() || analysisStatus === 'in-progress'}
@@ -323,6 +376,43 @@ The statistical analysis reveals important trends that could inform strategic de
                   <p className="text-sm text-red-700">{errorMessage}</p>
                 </div>
               )}
+            </Card>
+          )}
+
+          {/* API Statistics */}
+          {apiStatistics && (
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold mb-4">API Statistics</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                  <Clock className="h-4 w-4 text-primary" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Processing Time</p>
+                    <p className="font-semibold">{apiStatistics.processingTime}s</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                  <Hash className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Input Tokens</p>
+                    <p className="font-semibold">{apiStatistics.inputTokens.toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                  <Hash className="h-4 w-4 text-green-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Output Tokens</p>
+                    <p className="font-semibold">{apiStatistics.outputTokens.toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                  <Hash className="h-4 w-4 text-purple-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Tokens</p>
+                    <p className="font-semibold">{apiStatistics.totalTokens.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
             </Card>
           )}
 

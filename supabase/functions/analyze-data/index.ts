@@ -1,0 +1,188 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { selectedFiles, prompt, temperature, maxTokens } = await req.json();
+
+    console.log('Received request:', { selectedFiles, prompt, temperature, maxTokens });
+
+    // Get OpenAI API key from environment
+    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openAIApiKey) {
+      return new Response(JSON.stringify({ 
+        error: 'OpenAI API key not configured. Please add your OPENAI_API_KEY to Supabase Edge Functions secrets.' 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Get authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'No authorization header' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('User authenticated:', user.id);
+
+    // Read file contents
+    let fileContents = '';
+    for (const fileName of selectedFiles) {
+      try {
+        // Try both possible locations for the file
+        let { data, error } = await supabase.storage
+          .from('csv-files')
+          .download(`${user.id}/farm-data/${fileName}`);
+        
+        if (error) {
+          // Try certification-requirements folder
+          const result = await supabase.storage
+            .from('csv-files')
+            .download(`${user.id}/certification-requirements/${fileName}`);
+          data = result.data;
+          if (result.error) {
+            console.error(`Error downloading file ${fileName}:`, result.error);
+            continue;
+          }
+        }
+
+        if (data) {
+          const text = await data.text();
+          fileContents += `\n\n=== File: ${fileName} ===\n${text}`;
+          console.log(`Successfully read file: ${fileName}, size: ${text.length} chars`);
+        }
+      } catch (error) {
+        console.error(`Error reading file ${fileName}:`, error);
+      }
+    }
+
+    if (!fileContents) {
+      return new Response(JSON.stringify({ 
+        error: 'No file contents could be read from the selected files' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Prepare the full prompt with file contents
+    const fullPrompt = `${prompt}
+
+Here are the contents of the selected data files:
+${fileContents}
+
+Please analyze this data according to the prompt above.`;
+
+    console.log('Full prompt length:', fullPrompt.length);
+
+    // Record start time for processing time calculation
+    const startTime = Date.now();
+
+    // Prepare OpenAI API request
+    const openAIRequestBody: any = {
+      model: 'gpt-4o-mini',
+      messages: [
+        { 
+          role: 'system', 
+          content: 'You are a helpful data analyst. Analyze the provided data files according to the user\'s prompt and provide detailed insights, patterns, and recommendations.' 
+        },
+        { role: 'user', content: fullPrompt }
+      ],
+      max_tokens: maxTokens || 1000,
+    };
+
+    // Add temperature only if provided (gpt-4o-mini supports it)
+    if (temperature !== undefined && temperature !== null) {
+      openAIRequestBody.temperature = temperature;
+    }
+
+    console.log('Calling OpenAI API with model:', openAIRequestBody.model);
+
+    // Call OpenAI API
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(openAIRequestBody),
+    });
+
+    const endTime = Date.now();
+    const processingTime = (endTime - startTime) / 1000; // Convert to seconds
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('OpenAI API error:', response.status, errorData);
+      return new Response(JSON.stringify({ 
+        error: `OpenAI API error: ${response.status} - ${errorData}` 
+      }), {
+        status: response.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const data = await response.json();
+    console.log('OpenAI API response received');
+
+    // Extract the generated text and usage statistics
+    const generatedText = data.choices[0].message.content;
+    const usage = data.usage || {};
+
+    const result = {
+      generatedText,
+      statistics: {
+        processingTime: parseFloat(processingTime.toFixed(2)),
+        inputTokens: usage.prompt_tokens || 0,
+        outputTokens: usage.completion_tokens || 0,
+        totalTokens: usage.total_tokens || 0,
+      }
+    };
+
+    console.log('Analysis completed:', result.statistics);
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+  } catch (error) {
+    console.error('Error in analyze-data function:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message || 'Internal server error' 
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
