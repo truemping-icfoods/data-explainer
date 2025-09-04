@@ -206,13 +206,23 @@ Please analyze this data according to the prompt above.`;
 
     const inputTokens = usage.input_tokens ?? usage.prompt_tokens ?? 0;
     const outputTokens = usage.output_tokens ?? usage.completion_tokens ?? 0;
-    const reasoningTokens = usage.reasoning_tokens ?? 0;
+    
+    // Extract reasoning tokens from completion_tokens_details for GPT-5 models
+    const reasoningTokens = usage.reasoning_tokens ?? 
+                           usage.completion_tokens_details?.reasoning_tokens ?? 0;
+    
     const totalTokens = usage.total_tokens ?? (inputTokens + outputTokens);
 
-    // Check if we got empty content despite using tokens
-    if (!generatedText && reasoningTokens > 0) {
-      console.log('Warning: GPT-5 used reasoning tokens but returned empty content');
-      generatedText = 'The analysis used reasoning tokens but did not produce visible output. This can happen with GPT-5 when all tokens are used for internal reasoning. Try increasing max tokens or simplifying your prompt.';
+    // Check if we got empty content despite using tokens (common with GPT-5 models)
+    if (!generatedText && (reasoningTokens > 0 || outputTokens > 0)) {
+      console.log('Warning: Model used tokens but returned empty content. Reasoning tokens:', reasoningTokens, 'Output tokens:', outputTokens);
+      
+      // For GPT-5 models that use reasoning tokens, provide more helpful message
+      if (reasoningTokens > 0) {
+        generatedText = `The model completed internal reasoning using ${reasoningTokens} tokens but produced no visible output. This suggests the max_completion_tokens (${maxTokens || 2000}) may be too low for this complex analysis. Try increasing to 4000+ tokens or simplifying your prompt.`;
+      } else {
+        generatedText = 'The model processed your request but returned empty content. Try rephrasing your prompt or increasing the max tokens setting.';
+      }
     }
 
     const result = {
