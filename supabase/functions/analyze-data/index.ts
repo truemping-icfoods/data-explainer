@@ -109,9 +109,9 @@ Please analyze this data according to the prompt above.`;
     // Record start time for processing time calculation
     const startTime = Date.now();
 
-    // Prepare OpenAI API request
+    // Prepare OpenAI API request for GPT-5 (no temperature, uses max_completion_tokens)
     const openAIRequestBody: any = {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-2025-08-07',
       messages: [
         { 
           role: 'system', 
@@ -119,13 +119,10 @@ Please analyze this data according to the prompt above.`;
         },
         { role: 'user', content: fullPrompt }
       ],
-      max_tokens: maxTokens || 1000,
+      ...(maxTokens ? { max_completion_tokens: maxTokens } : {}),
     };
 
-    // Add temperature only if provided (gpt-4o-mini supports it)
-    if (temperature !== undefined && temperature !== null) {
-      openAIRequestBody.temperature = temperature;
-    }
+    // Note: GPT-5 does not support the temperature parameter; it will be ignored if provided
 
     console.log('Calling OpenAI API with model:', openAIRequestBody.model);
 
