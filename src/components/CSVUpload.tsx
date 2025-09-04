@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Upload, File, Download, Loader2, BarChart3 } from "lucide-react";
+import { Upload, File, Download, Loader2, BarChart3, Trash2 } from "lucide-react";
 
 type FileType = "farm-data" | "certification-requirements";
 
@@ -128,6 +128,34 @@ const CSVUpload = () => {
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
   };
 
+  const handleDelete = async (uploadedFile: UploadedFile) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("You must be logged in to delete files");
+        return;
+      }
+
+      // Construct the file path
+      const filePath = `${user.id}/${uploadedFile.type}/${uploadedFile.name}`;
+      
+      const { error } = await supabase.storage
+        .from("csv-files")
+        .remove([filePath]);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success("File deleted successfully!");
+      // Refresh the file list
+      fetchUploadedFiles();
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error("Failed to delete file");
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       {/* Upload Section */}
@@ -240,9 +268,19 @@ const CSVUpload = () => {
                       </p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm">
-                    <Download className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm">
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleDelete(uploadedFile)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
