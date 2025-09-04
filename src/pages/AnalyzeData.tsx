@@ -123,9 +123,12 @@ const AnalyzeData = () => {
     }, 500);
 
     try {
+      // Deduplicate selected files to reduce prompt size and cost
+      const uniqueSelectedFiles = Array.from(new Set(selectedFiles));
+
       const { data, error } = await supabase.functions.invoke('analyze-data', {
         body: {
-          selectedFiles,
+          selectedFiles: uniqueSelectedFiles,
           prompt,
           temperature,
           maxTokens
@@ -133,23 +136,38 @@ const AnalyzeData = () => {
       });
 
       if (error) {
-        throw new Error(error.message || 'Failed to analyze data');
+        console.error('Edge function error:', error);
+        const raw = (error as any)?.message || '';
+        let friendly = 'Failed to analyze data.';
+        if (raw.includes('non-2xx') || raw.includes('429')) {
+          friendly = 'The AI provider returned 429 (quota exceeded). Please check your OpenAI billing/credits.';
+        }
+        setAnalysisStatus('error');
+        setErrorMessage(friendly);
+        toast.error(friendly);
+        return;
       }
 
-      if (data.error) {
-        throw new Error(data.error);
+      if (data?.error) {
+        const raw = String(data.error);
+        let friendly = raw;
+        if (raw.includes('429') || raw.toLowerCase().includes('insufficient_quota')) {
+          friendly = 'OpenAI quota exceeded for your API key. Please add billing/credits and try again.';
+        }
+        throw new Error(friendly);
       }
 
       setAnalysisStatus('successful');
       setLlmOutput(data.generatedText);
       setApiStatistics(data.statistics);
-      toast.success("Analysis completed successfully!");
+      toast.success('Analysis completed successfully!');
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Analysis error:', error);
       setAnalysisStatus('error');
-      setErrorMessage(error.message || 'An unexpected error occurred during analysis');
-      toast.error("Analysis failed");
+      const msg = error?.message || 'An unexpected error occurred during analysis';
+      setErrorMessage(msg);
+      toast.error(msg);
     }
   };
 
