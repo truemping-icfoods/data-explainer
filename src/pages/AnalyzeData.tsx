@@ -40,6 +40,7 @@ const AnalyzeData = () => {
     processingTime: number;
     inputTokens: number;
     outputTokens: number;
+    reasoningTokens: number;
     totalTokens: number;
   } | null>(null);
 
@@ -342,14 +343,14 @@ const AnalyzeData = () => {
                   <Input
                     id="max-tokens"
                     type="number"
-                    min="100"
+                    min="1"
                     max="4000"
                     value={maxTokens}
-                    onChange={(e) => setMaxTokens(Math.max(100, parseInt(e.target.value) || 2000))}
+                    onChange={(e) => setMaxTokens(parseInt(e.target.value) || 2000)}
                     placeholder="2000"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Maximum length of the response (minimum 100 tokens for GPT-5)
+                    Maximum length of the response (1-4000 tokens)
                   </p>
                 </div>
               </div>
@@ -401,7 +402,7 @@ const AnalyzeData = () => {
           {apiStatistics && (
             <Card className="p-6">
               <h2 className="text-xl font-semibold mb-4">API Statistics</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
                   <Clock className="h-4 w-4 text-primary" />
                   <div>
@@ -421,6 +422,13 @@ const AnalyzeData = () => {
                   <div>
                     <p className="text-xs text-muted-foreground">Output Tokens</p>
                     <p className="font-semibold">{apiStatistics.outputTokens.toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                  <Hash className="h-4 w-4 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Reasoning Tokens</p>
+                    <p className="font-semibold">{apiStatistics.reasoningTokens.toLocaleString()}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">

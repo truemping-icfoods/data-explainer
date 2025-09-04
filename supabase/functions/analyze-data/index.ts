@@ -197,6 +197,7 @@ Please analyze this data according to the prompt above.`;
 
     const inputTokens = usage.input_tokens ?? usage.prompt_tokens ?? 0;
     const outputTokens = usage.output_tokens ?? usage.completion_tokens ?? 0;
+    const reasoningTokens = usage.reasoning_tokens ?? 0;
     const totalTokens = usage.total_tokens ?? (inputTokens + outputTokens);
 
     const result = {
@@ -205,6 +206,7 @@ Please analyze this data according to the prompt above.`;
         processingTime: parseFloat(processingTime.toFixed(2)),
         inputTokens,
         outputTokens,
+        reasoningTokens,
         totalTokens,
       }
     };
