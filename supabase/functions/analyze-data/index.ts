@@ -115,11 +115,12 @@ Please analyze this data according to the prompt above.`;
       messages: [
         { 
           role: 'system', 
-          content: 'You are a helpful data analyst. Analyze the provided data files according to the user\'s prompt and provide detailed insights, patterns, and recommendations.' 
+          content: 'You are a helpful data analyst. Analyze the provided data files according to the user\'s prompt and provide detailed insights, patterns, and recommendations. Always provide a clear, concise response in your output.' 
         },
         { role: 'user', content: fullPrompt }
       ],
-      ...(maxTokens ? { max_completion_tokens: maxTokens } : {}),
+      // Ensure we have enough tokens for both reasoning and output
+      max_completion_tokens: Math.max(maxTokens || 2000, 1000),
     };
 
     // Note: GPT-5 does not support the temperature parameter; it will be ignored if provided
@@ -199,6 +200,12 @@ Please analyze this data according to the prompt above.`;
     const outputTokens = usage.output_tokens ?? usage.completion_tokens ?? 0;
     const reasoningTokens = usage.reasoning_tokens ?? 0;
     const totalTokens = usage.total_tokens ?? (inputTokens + outputTokens);
+
+    // Check if we got empty content despite using tokens
+    if (!generatedText && reasoningTokens > 0) {
+      console.log('Warning: GPT-5 used reasoning tokens but returned empty content');
+      generatedText = 'The analysis used reasoning tokens but did not produce visible output. This can happen with GPT-5 when all tokens are used for internal reasoning. Try increasing max tokens or simplifying your prompt.';
+    }
 
     const result = {
       generatedText: typeof generatedText === 'string' ? generatedText.trim() : '',
