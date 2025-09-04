@@ -154,20 +154,58 @@ Please analyze this data according to the prompt above.`;
     console.log('OpenAI API response received');
     console.log('Full OpenAI response:', JSON.stringify(data, null, 2));
 
-    // Extract the generated text and usage statistics
-    const generatedText = data.choices?.[0]?.message?.content || '';
+    // Extract the generated text robustly (handles string and array content shapes)
+    let generatedText = '';
+    try {
+      const choice0 = data?.choices?.[0] ?? {};
+      const message = choice0?.message ?? {};
+      const msgContent = message?.content;
+
+      if (typeof msgContent === 'string') {
+        generatedText = msgContent;
+      } else if (Array.isArray(msgContent)) {
+        generatedText = msgContent
+          .map((part: any) =>
+            typeof part === 'string' ? part : (part?.text ?? part?.content ?? '')
+          )
+          .join('');
+      }
+
+      // Additional fallbacks some models may use
+      const choiceContent = choice0?.content;
+      if (!generatedText && typeof choiceContent === 'string') {
+        generatedText = choiceContent;
+      } else if (!generatedText && Array.isArray(choiceContent)) {
+        generatedText = choiceContent
+          .map((part: any) =>
+            typeof part === 'string' ? part : (part?.text ?? part?.content ?? '')
+          )
+          .join('');
+      }
+
+      if (!generatedText && typeof data?.output_text === 'string') {
+        generatedText = data.output_text;
+      }
+    } catch (e) {
+      console.error('Error extracting generated text:', e);
+    }
+
     const usage = data.usage || {};
     
-    console.log('Extracted generated text length:', generatedText.length);
-    console.log('Generated text preview:', generatedText.substring(0, 200));
+    console.log('Extracted generated text length:', (generatedText || '').length);
+    console.log('Generated text preview:', (generatedText || '').substring(0, 200));
+
+    const inputTokens = usage.input_tokens ?? usage.prompt_tokens ?? 0;
+    const outputTokens = usage.output_tokens ?? usage.completion_tokens ?? 0;
+    const totalTokens = usage.total_tokens ?? (inputTokens + outputTokens);
 
     const result = {
-      generatedText,
+      generatedText: typeof generatedText === 'string' ? generatedText.trim() : '',
       statistics: {
         processingTime: parseFloat(processingTime.toFixed(2)),
-        inputTokens: usage.prompt_tokens || 0,
-        outputTokens: usage.completion_tokens || 0,
-        totalTokens: usage.total_tokens || 0,
+        inputTokens,
+        outputTokens,
+        totalTokens,
       }
     };
 
