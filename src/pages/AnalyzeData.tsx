@@ -32,6 +32,7 @@ const AnalyzeData = () => {
   const [prompt, setPrompt] = useState("");
   const [temperature, setTemperature] = useState<number>(0.7);
   const [maxTokens, setMaxTokens] = useState<number>(2000);
+  const [selectedModel, setSelectedModel] = useState<string>("gpt-5-2025-08-07");
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [llmOutput, setLlmOutput] = useState<string>("");
   const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'submitted' | 'in-progress' | 'successful' | 'error'>('idle');
@@ -42,6 +43,7 @@ const AnalyzeData = () => {
     outputTokens: number;
     reasoningTokens: number;
     totalTokens: number;
+    model: string;
   } | null>(null);
 
   useEffect(() => {
@@ -132,7 +134,8 @@ const AnalyzeData = () => {
           selectedFiles: uniqueSelectedFiles,
           prompt,
           temperature,
-          maxTokens
+          maxTokens,
+          model: selectedModel
         }
       });
 
@@ -320,7 +323,27 @@ const AnalyzeData = () => {
               />
               
               {/* OpenAI Parameters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="model">Model</Label>
+                  <select
+                    id="model"
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
+                  >
+                    <option value="gpt-5-2025-08-07">GPT-5 (Latest)</option>
+                    <option value="gpt-5-mini-2025-08-07">GPT-5 Mini (Fast)</option>
+                    <option value="gpt-4.1-2025-04-14">GPT-4.1 (Reliable)</option>
+                    <option value="o3-2025-04-16">O3 (Reasoning)</option>
+                    <option value="gpt-4o">GPT-4o (Legacy)</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini (Legacy)</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Choose the AI model for analysis
+                  </p>
+                </div>
+                
                 <div className="space-y-2">
                   <Label htmlFor="temperature">Temperature (0.0 - 2.0)</Label>
                   <Input
@@ -402,7 +425,14 @@ const AnalyzeData = () => {
           {apiStatistics && (
             <Card className="p-6">
               <h2 className="text-xl font-semibold mb-4">API Statistics</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                  <Hash className="h-4 w-4 text-indigo-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Model</p>
+                    <p className="font-semibold text-xs">{apiStatistics.model}</p>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
                   <Clock className="h-4 w-4 text-primary" />
                   <div>

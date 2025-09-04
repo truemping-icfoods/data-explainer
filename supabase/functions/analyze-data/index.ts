@@ -14,9 +14,9 @@ serve(async (req) => {
   }
 
   try {
-    const { selectedFiles, prompt, temperature, maxTokens } = await req.json();
+    const { selectedFiles, prompt, temperature, maxTokens, model } = await req.json();
 
-    console.log('Received request:', { selectedFiles, prompt, temperature, maxTokens });
+    console.log('Received request:', { selectedFiles, prompt, temperature, maxTokens, model });
 
     // Get OpenAI API key from environment
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -109,21 +109,29 @@ Please analyze this data according to the prompt above.`;
     // Record start time for processing time calculation
     const startTime = Date.now();
 
-    // Prepare OpenAI API request for GPT-5 (no temperature, uses max_completion_tokens)
+    // Prepare OpenAI API request - different models need different parameters
     const openAIRequestBody: any = {
-      model: 'gpt-5-2025-08-07',
+      model: model || 'gpt-5-2025-08-07',
       messages: [
         { 
           role: 'system', 
           content: 'You are a helpful data analyst. Analyze the provided data files according to the user\'s prompt and provide detailed insights, patterns, and recommendations. Always provide a clear, concise response in your output.' 
         },
         { role: 'user', content: fullPrompt }
-      ],
-      // Ensure we have enough tokens for both reasoning and output
-      max_completion_tokens: Math.max(maxTokens || 2000, 1000),
+      ]
     };
 
-    // Note: GPT-5 does not support the temperature parameter; it will be ignored if provided
+    // Handle model-specific parameters
+    const isGPT5OrNewer = (model || '').includes('gpt-5') || (model || '').includes('o3') || (model || '').includes('o4') || (model || '').includes('gpt-4.1');
+    
+    if (isGPT5OrNewer) {
+      // GPT-5 and newer models use max_completion_tokens and don't support temperature
+      openAIRequestBody.max_completion_tokens = Math.max(maxTokens || 2000, 1000);
+    } else {
+      // Legacy models (gpt-4o, gpt-4o-mini) use max_tokens and support temperature
+      openAIRequestBody.max_tokens = maxTokens || 2000;
+      openAIRequestBody.temperature = temperature || 0.7;
+    }
 
     console.log('Calling OpenAI API with model:', openAIRequestBody.model);
 
@@ -215,6 +223,7 @@ Please analyze this data according to the prompt above.`;
         outputTokens,
         reasoningTokens,
         totalTokens,
+        model: openAIRequestBody.model,
       }
     };
 
