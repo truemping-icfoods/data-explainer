@@ -31,7 +31,7 @@ const AnalyzeData = () => {
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [prompt, setPrompt] = useState("");
   const [temperature, setTemperature] = useState<number>(0.7);
-  const [maxTokens, setMaxTokens] = useState<number>(1000);
+  const [maxTokens, setMaxTokens] = useState<number>(2000);
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [llmOutput, setLlmOutput] = useState<string>("");
   const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'submitted' | 'in-progress' | 'successful' | 'error'>('idle');
@@ -342,14 +342,14 @@ const AnalyzeData = () => {
                   <Input
                     id="max-tokens"
                     type="number"
-                    min="1"
+                    min="100"
                     max="4000"
                     value={maxTokens}
-                    onChange={(e) => setMaxTokens(parseInt(e.target.value) || 1000)}
-                    placeholder="1000"
+                    onChange={(e) => setMaxTokens(Math.max(100, parseInt(e.target.value) || 2000))}
+                    placeholder="2000"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Maximum length of the response (1-4000 tokens)
+                    Maximum length of the response (minimum 100 tokens for GPT-5)
                   </p>
                 </div>
               </div>
