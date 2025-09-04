@@ -152,10 +152,14 @@ Please analyze this data according to the prompt above.`;
 
     const data = await response.json();
     console.log('OpenAI API response received');
+    console.log('Full OpenAI response:', JSON.stringify(data, null, 2));
 
     // Extract the generated text and usage statistics
-    const generatedText = data.choices[0].message.content;
+    const generatedText = data.choices?.[0]?.message?.content || '';
     const usage = data.usage || {};
+    
+    console.log('Extracted generated text length:', generatedText.length);
+    console.log('Generated text preview:', generatedText.substring(0, 200));
 
     const result = {
       generatedText,
