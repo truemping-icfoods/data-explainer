@@ -7,6 +7,109 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Function to detect downloadable content in LLM response
+function detectDownloadableContent(text: string) {
+  if (!text) return null;
+
+  // Patterns to detect different file types
+  const patterns = [
+    {
+      type: 'csv',
+      pattern: /```csv\n([\s\S]*?)\n```/i,
+      extension: 'csv',
+      mimeType: 'text/csv'
+    },
+    {
+      type: 'json',
+      pattern: /```json\n([\s\S]*?)\n```/i,
+      extension: 'json',
+      mimeType: 'application/json'
+    },
+    {
+      type: 'xml',
+      pattern: /```xml\n([\s\S]*?)\n```/i,
+      extension: 'xml',
+      mimeType: 'application/xml'
+    },
+    {
+      type: 'txt',
+      pattern: /```(?:txt|text)\n([\s\S]*?)\n```/i,
+      extension: 'txt',
+      mimeType: 'text/plain'
+    },
+    {
+      type: 'sql',
+      pattern: /```sql\n([\s\S]*?)\n```/i,
+      extension: 'sql',
+      mimeType: 'text/plain'
+    },
+    {
+      type: 'python',
+      pattern: /```python\n([\s\S]*?)\n```/i,
+      extension: 'py',
+      mimeType: 'text/plain'
+    },
+    {
+      type: 'javascript',
+      pattern: /```(?:javascript|js)\n([\s\S]*?)\n```/i,
+      extension: 'js',
+      mimeType: 'text/plain'
+    }
+  ];
+
+  // Check for CSV-like content (comma-separated values with headers)
+  const csvLikePattern = /^[^,\n]+(?:,[^,\n]+)*\n(?:[^,\n]*(?:,[^,\n]*)*\n?)+$/m;
+  if (csvLikePattern.test(text.trim()) && text.includes(',')) {
+    const lines = text.trim().split('\n');
+    if (lines.length > 1 && lines[0].includes(',')) {
+      return {
+        hasFile: true,
+        content: text.trim(),
+        filename: 'analysis_result.csv',
+        extension: 'csv',
+        mimeType: 'text/csv',
+        type: 'csv'
+      };
+    }
+  }
+
+  // Check for code block patterns
+  for (const pattern of patterns) {
+    const match = text.match(pattern.pattern);
+    if (match && match[1]) {
+      return {
+        hasFile: true,
+        content: match[1].trim(),
+        filename: `analysis_result.${pattern.extension}`,
+        extension: pattern.extension,
+        mimeType: pattern.mimeType,
+        type: pattern.type
+      };
+    }
+  }
+
+  // Check for JSON-like content
+  try {
+    const trimmed = text.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      JSON.parse(trimmed);
+      return {
+        hasFile: true,
+        content: trimmed,
+        filename: 'analysis_result.json',
+        extension: 'json',
+        mimeType: 'application/json',
+        type: 'json'
+      };
+    }
+  } catch (e) {
+    // Not valid JSON, continue
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -225,8 +328,12 @@ Please analyze this data according to the prompt above.`;
       }
     }
 
+    // Detect if the response contains downloadable file content
+    const fileInfo = detectDownloadableContent(generatedText);
+
     const result = {
       generatedText: typeof generatedText === 'string' ? generatedText.trim() : '',
+      fileInfo,
       statistics: {
         processingTime: parseFloat(processingTime.toFixed(2)),
         inputTokens,

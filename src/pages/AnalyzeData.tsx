@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, File, Loader2, Send, Edit, Clock, Hash } from "lucide-react";
+import { ArrowLeft, File, Loader2, Send, Edit, Clock, Hash, Download } from "lucide-react";
 
 type FileType = "farm-data" | "certification-requirements";
 
@@ -45,6 +45,7 @@ const AnalyzeData = () => {
     totalTokens: number;
     model: string;
   } | null>(null);
+  const [fileInfo, setFileInfo] = useState<any>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -95,6 +96,28 @@ const AnalyzeData = () => {
     setAnalysisStatus('idle');
     setErrorMessage("");
     setApiStatistics(null);
+    setFileInfo(null);
+  };
+
+  const handleDownloadFile = () => {
+    if (!fileInfo || !fileInfo.hasFile) return;
+
+    // Create blob with the file content
+    const blob = new Blob([fileInfo.content], { type: fileInfo.mimeType });
+    
+    // Create download link
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileInfo.filename;
+    
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleFileSelection = (fileName: string, isSelected: boolean) => {
@@ -164,6 +187,7 @@ const AnalyzeData = () => {
       setAnalysisStatus('successful');
       setLlmOutput(data.generatedText);
       setApiStatistics(data.statistics);
+      setFileInfo(data.fileInfo);
       toast.success('Analysis completed successfully!');
 
     } catch (error: any) {
@@ -475,7 +499,27 @@ const AnalyzeData = () => {
           {/* LLM Output */}
           {llmOutput && (
             <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Analysis Results</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Analysis Results</h2>
+                {fileInfo && fileInfo.hasFile && (
+                  <Button 
+                    onClick={handleDownloadFile}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download {fileInfo.type.toUpperCase()} File
+                  </Button>
+                )}
+              </div>
+              {fileInfo && fileInfo.hasFile && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-700">
+                    📁 Downloadable file detected: <strong>{fileInfo.filename}</strong> ({fileInfo.type.toUpperCase()})
+                  </p>
+                </div>
+              )}
               <div className="bg-muted/50 p-4 rounded-lg border">
                 <pre className="whitespace-pre-wrap text-sm font-mono text-foreground">
                   {llmOutput}
